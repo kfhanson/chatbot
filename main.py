@@ -247,3 +247,95 @@ PDF內容:
 
 回答:
 """
+# --- 9. Helper Functions ---
+def generate_search_query(topic, previous_findings=None, knowledge_gaps=None):
+    """Generate a focused search query based on topic and previous research."""
+    try:
+        # Create a more direct prompt that emphasizes the original question
+        language = st.session_state.fixed_language
+        
+        if language == 'zh':
+            prompt = f"""原始問題: {topic}
+您的任務: 生成一個簡單直接的搜索查詢（5-10個詞）以查找有關此主題的信息。
+- 只關注原始問題中的主要概念
+- 不要包含像「這是」或「搜索查詢」等短語
+- 不要使用引號或特殊字符
+- 只寫實際的搜索詞，沒有其他內容
+- 要具體並在適當時使用醫學/技術術語
+
+好的查詢示例:
+- DOAC VKA 心包填塞 比較
+- 阿司匹林 抗炎 作用機制
+- 氣候變化 珊瑚礁 影響
+
+不好的查詢示例:
+- 「這是關於DOAC的搜索查詢」
+- 這裡有兩個可能的搜索查詢
+- 我將搜索有關的信息
+
+您的搜索查詢:"""
+        else:
+            prompt = f"""ORIGINAL QUESTION: {topic}
+Your task: Generate a simple, direct search query (5-10 words) to find information about this topic.
+- Focus ONLY on the main concepts from the original question
+- Do NOT include phrases like "here is" or "search query"
+- Do NOT use quotes or special characters
+- Just write the actual search terms, nothing else
+- Be specific and use medical/technical terms when appropriate
+
+Example good queries:
+- DOAC VKA cardiac tamponade comparison
+- aspirin mechanism of action inflammation
+- climate change impact coral reefs
+
+Example bad queries:
+- "Here is a search query about DOAC"
+- Here are two possible search queries
+- I will search for information about
+
+YOUR SEARCH QUERY:"""
+        
+        response = st.session_state.ollama_client.chat(
+            model=st.session_state.selected_model,
+            messages=[
+                {"role": "system", "content": "你是一個搜索查詢生成器。只生成搜索詞，沒有其他內容。" if language == 'zh' else "You are a search query generator. Generate only the search terms, nothing else."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        
+        # Clean up the generated query
+        query = response['message']['content'].strip()
+        query = query.replace('"', '').replace("'", "").replace("(", "").replace(")", "")
+        
+        # Remove common prefixes that the model might still include
+        prefixes_to_remove = [
+            "Here is", "Here are", "Search query:", "Query:", "YOUR SEARCH QUERY:", 
+            "A good search query would be", "I would search for", "Search for",
+            "以下是", "查詢:", "搜索查詢:", "一個好的搜索查詢是", "我會搜索", "搜索"
+        ]
+        
+        for prefix in prefixes_to_remove:
+            if query.startswith(prefix):
+                query = query[len(prefix):].strip()
+        
+        # If query is too long, take just the first sentence or limit to 15 words
+        if len(query.split()) > 15:
+            if "." in query:
+                query = query.split(".")[0].strip()
+            else:
+                query = " ".join(query.split()[:15])
+        
+        # Print the original question and the search query for clarity
+        if language == 'zh':
+            st.markdown(f"*原始問題:* {topic}")
+            st.markdown(f"*生成的搜索詞:* {query}")
+        else:
+            st.markdown(f"*Original Question:* {topic}")
+            st.markdown(f"*Generated Search Terms:* {query}")
+        
+        return query
+    except Exception as e:
+        st.warning(f"Error generating search query: {e}")
+        # Fallback to a simplified version of the original question
+        simple_query = " ".join(topic.split()[:10])
+        return simple_query
