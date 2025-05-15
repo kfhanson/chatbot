@@ -397,3 +397,48 @@ Format your response as JSON with keys: 'summary', 'gaps', 'next_focus'"""
             "next_focus": topic
         }
     
+def deep_research(query, language='en'):
+    """Perform iterative deep research on a topic."""
+    all_findings = []
+    current_summary = ""
+    all_sources = []  # Track all sources used
+    max_attempts = 6  # Maximum number of attempts to get meaningful results
+    
+    # Create a container to capture the research process
+    research_container = st.empty()
+    with research_container, st.expander("🔍 Research Process", expanded=True):
+        iteration = 0
+        while iteration < SEARCH_CONFIG['max_iterations']:  # Changed from RESEARCH_CONFIG
+            attempt = 0
+            meaningful_iteration = False
+            
+            while not meaningful_iteration and attempt < max_attempts:
+                attempt += 1
+                st.markdown(f"**Iteration {iteration + 1} (Attempt {attempt})**")
+                
+                # Generate search query
+                search_query = generate_search_query(
+                    query, 
+                    current_summary if current_summary else None,
+                    all_findings[-1].get('gaps', None) if all_findings else None
+                )
+                
+                st.markdown(f"*Search Query:* {search_query}")
+                
+                # Perform search and display sources
+                search_results = get_web_search_results(
+                    search_query,
+                    language=language
+                )
+                
+                if not search_results:
+                    st.warning("No information found. Trying a different query...")
+                    continue
+                
+                # Extract sources
+                sources = []
+                for line in search_results.split('\n'):
+                    if 'Source:' in line or '來源:' in line:
+                        url = line.split(': ')[-1].strip()
+                        if url not in all_sources:  # Only add unique sources
+                            sources.append(url)
