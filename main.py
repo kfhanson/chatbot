@@ -339,3 +339,61 @@ YOUR SEARCH QUERY:"""
         # Fallback to a simplified version of the original question
         simple_query = " ".join(topic.split()[:10])
         return simple_query
+
+def analyze_findings(topic, current_findings, iteration):
+    """Analyze current findings and identify knowledge gaps."""
+    try:
+        language = st.session_state.fixed_language
+        
+        if language == 'zh':
+            prompt = f"""基於我們對 '{topic}' 的研究，分析以下發現：
+
+{current_findings}
+
+對於迭代 {iteration}，請：
+1. 總結我們學到的要點
+2. 確定特定的知識差距或需要更多細節的領域
+3. 建議我們接下來應該調查哪些具體方面
+
+請將您的回應格式化為JSON，使用鍵：'summary'（摘要）、'gaps'（差距）、'next_focus'（下一個焦點）"""
+        else:
+            prompt = f"""Based on our research about '{topic}', analyze these findings:
+
+{current_findings}
+
+For iteration {iteration}, please:
+1. Summarize the key points we've learned
+2. Identify specific knowledge gaps or areas that need more detail
+3. Suggest what specific aspects we should investigate next
+
+Format your response as JSON with keys: 'summary', 'gaps', 'next_focus'"""
+
+        response = st.session_state.ollama_client.chat(
+            model=st.session_state.selected_model,
+            messages=[
+                {"role": "system", "content": "你是一個研究分析師，識別知識差距。" if language == 'zh' else "You are a research analyst identifying knowledge gaps."},
+                {"role": "user", "content": prompt}
+            ],
+            format='json'
+        )
+        
+        analysis_result = json.loads(response['message']['content'])
+        
+        # Ensure summary is a string
+        summary = analysis_result.get('summary', '')
+        if not isinstance(summary, str):
+            summary = str(summary)  # Convert to string if not
+        
+        return {
+            "summary": summary,
+            "gaps": analysis_result.get('gaps', "沒有識別出差距" if language == 'zh' else "No gaps identified"),
+            "next_focus": analysis_result.get('next_focus', topic)
+        }
+    except Exception as e:
+        st.warning(f"Error analyzing findings: {e}")
+        return {
+            "summary": "分析失敗" if st.session_state.fixed_language == 'zh' else "Analysis failed",
+            "gaps": "分析失敗" if st.session_state.fixed_language == 'zh' else "Analysis failed",
+            "next_focus": topic
+        }
+    
